@@ -32,6 +32,11 @@ cs_add_executable(tsdf_server
 )
 target_link_libraries(tsdf_server ${PROJECT_NAME})
 
+cs_add_executable(batch_tsdf
+  src/batch_tsdf.cc
+)
+target_link_libraries(batch_tsdf ${PROJECT_NAME})
+
 cs_add_executable(esdf_server
   src/esdf_server_node.cc
 )

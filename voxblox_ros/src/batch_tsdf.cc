@@ -44,24 +44,26 @@ class BatchSdfIntegrator {
  public:
   BatchSdfIntegrator(){}
 
-  void Run(std::string const& index_file, std::string const& out_cloud, int beg, int end){
+  void Run(std::string const& index_file, std::string const& out_cloud,
+           double max_ray_length_m, double voxel_size, int beg, int end){
 
-    voxel_size_ = 0.01;
+    voxel_size_ = voxel_size;
     voxels_per_side_ = 16;
     block_size_ = voxels_per_side_ * voxel_size_;
     truncation_distance_ = 2 * voxel_size_;
-    max_ray_length_m_ = 3.0;
     
-    std::cout << "voxel size " << voxel_size_ << std::endl;
-    std::cout << "voxels per side " << voxels_per_side_ << std::endl;
-    std::cout << "--block size " << block_size_ << std::endl;
-    
+    double intensity_max_value = 256;
+
+    std::cout << "Voxel size:          " << voxel_size_ << std::endl;
+    std::cout << "Voxels per side:     " << voxels_per_side_ << std::endl;
+    std::cout << "Block size           " << block_size_ << std::endl;
     std::cout << "Truncation distance: " << truncation_distance_ << std::endl;
-    std::cout << "Max ray length " << max_ray_length_m_ << std::endl;
+    std::cout << "Max ray length:      " << max_ray_length_m << std::endl;
+    std::cout << "Intensity max value: " << intensity_max_value << std::endl;
     
     TsdfIntegratorBase::Config config;
     config.default_truncation_distance = truncation_distance_;
-    config.max_ray_length_m = max_ray_length_m_;
+    config.max_ray_length_m = max_ray_length_m;
     config.integrator_threads = 1;
     
 //     // Simple integrator
@@ -77,15 +79,9 @@ class BatchSdfIntegrator {
 //     FastTsdfIntegrator fast_integrator(config, &fast_layer);
 
     mesh_layer_.reset(new MeshLayer(block_size_));
-    std::cout << "--2 block size " << block_size_ << std::endl;
-
-    //std::cout << "--1 block size : " << tsdf_map_->block_size() << std::endl;
-    std::cout << "--voxel size " <<  merged_layer.voxel_size() << std::endl;
     
     color_map_.reset(new GrayscaleColorMap());
 
-    double intensity_max_value = 256;
-    std::cout << "intensity max value " << intensity_max_value << std::endl;
     color_map_->setMaxValue(intensity_max_value);
 
     // Note that we use the merging integrator!
@@ -96,7 +92,7 @@ class BatchSdfIntegrator {
 
 
     std::vector<std::string> clouds, poses;
-    std::cout << "Reading " << index_file << std::endl;
+    std::cout << "Reading: " << index_file << std::endl;
 
     std::ifstream ifs(index_file.c_str());
     std::string pose_file, cloud_file;
@@ -115,7 +111,7 @@ class BatchSdfIntegrator {
 
       pcl::PointCloud<pcl::PointXYZI> pointcloud_pcl;
       if (pcl::io::loadPCDFile<pcl::PointXYZI> (clouds[i], pointcloud_pcl) == -1) {
-        std::cout << "Could not read " << clouds[i] << std::endl;
+        std::cout << "Could not read: " << clouds[i] << std::endl;
         return;
       }
 
@@ -125,6 +121,7 @@ class BatchSdfIntegrator {
       
       convertPointcloud(pointcloud_pcl, color_map_, &points_C, &colors);
 
+      // Read the transform from camera that acquired the point clouds to world
       Eigen::Affine3d T;
       readAffine(T, poses[i]);
       
@@ -158,7 +155,6 @@ class BatchSdfIntegrator {
   int voxels_per_side_;
   double block_size_;
   FloatingPoint truncation_distance_;
-  FloatingPoint max_ray_length_m_;
 
   std::shared_ptr<MeshLayer> mesh_layer_;
   std::shared_ptr<MeshIntegrator<TsdfVoxel>> mesh_integrator_;
@@ -168,19 +164,21 @@ class BatchSdfIntegrator {
 
 int main(int argc, char** argv) {
 
-  if (argc < 3) {
-    std::cout << "Must specify the data directory and output cloud name." << std::endl;
+  if (argc < 5) {
+    std::cout << "Must specify the data directory, output cloud name, and max ray length." << std::endl;
     return 1;
   }
   
   std::string index_file = argv[1];
   std::string out_cloud = argv[2];
+  double max_ray_length_m = atof(argv[3]);
+  double voxel_size = atof(argv[4]);
 
   int beg = 0;
   int end = std::numeric_limits<int>::max();
-  if (argc >= 5) {
-    beg = atoi(argv[3]);
-    end = atoi(argv[4]);
+  if (argc >= 6) {
+    beg = atoi(argv[5]);
+    end = atoi(argv[6]);
   }
   
   std::cout << "index file is " << index_file << std::endl;
@@ -188,7 +186,7 @@ int main(int argc, char** argv) {
   std::cout << "beg is " << beg << std::endl;
   std::cout << "end is " << end << std::endl;
   BatchSdfIntegrator B;
-  B.Run(index_file, out_cloud, beg, end);
+  B.Run(index_file, out_cloud, max_ray_length_m, voxel_size, beg, end);
   
   return 0;
 }
