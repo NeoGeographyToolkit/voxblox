@@ -165,7 +165,8 @@ class BatchSdfIntegrator {
 int main(int argc, char** argv) {
 
   if (argc < 5) {
-    std::cout << "Must specify the data directory, output cloud name, and max ray length." << std::endl;
+    std::cout << "Must specify the data index file, output cloud name, and max ray length."
+	  << std::endl;
     return 1;
   }
   
