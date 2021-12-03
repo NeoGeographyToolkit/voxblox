@@ -30,7 +30,7 @@ If using `SSH keys for github <https://help.github.com/articles/connecting-to-gi
 If **not using SSH** keys but using https instead::
 
 	cd ~/catkin_ws/src/
-	git clone https://github.com/ethz-asl/voxblox.git
+	git clone https://github.com/oleg-alexandrov/voxblox.git
 	wstool init . ./voxblox/voxblox_https.rosinstall
 	wstool update
 
