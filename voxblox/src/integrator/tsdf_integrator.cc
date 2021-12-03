@@ -168,7 +168,7 @@ void TsdfIntegratorBase::updateTsdfVoxel(const Point& origin,
                      (config_.default_truncation_distance - dropoff_epsilon);
     updated_weight = std::max(updated_weight, 0.0f);
   }
-
+  
   // Compute the updated weight in case we compensate for sparsity. By
   // multiplicating the weight of occupied areas (|sdf| < truncation distance)
   // by a factor, we prevent to easily fade out these areas with the free
@@ -271,7 +271,8 @@ void SimpleTsdfIntegrator::integrateFunction(const Transformation& T_G_C,
                                              const bool freespace_points,
                                              ThreadSafeIndex* index_getter) {
   DCHECK(index_getter != nullptr);
-
+  DCHECK(pointWeights.empty() || points_C.size() == pointWeights.size());
+  
   size_t point_idx;
   while (index_getter->getNextIndex(&point_idx)) {
     const Point& point_C = points_C[point_idx];
@@ -296,7 +297,11 @@ void SimpleTsdfIntegrator::integrateFunction(const Transformation& T_G_C,
       TsdfVoxel* voxel =
           allocateStorageAndGetVoxelPtr(global_voxel_idx, &block, &block_idx);
 
-      const float weight = getVoxelWeight(point_C);
+      float weight;
+      if (!pointWeights.empty() && pointWeights[point_idx] > 0.0)
+        weight = pointWeights[point_idx]; // custom weight passed from outside
+      else
+        weight = getVoxelWeight(point_C);
 
       updateTsdfVoxel(origin, point_G, global_voxel_idx, color, weight, voxel);
     }

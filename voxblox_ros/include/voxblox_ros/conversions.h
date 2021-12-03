@@ -122,7 +122,16 @@ inline Color convertColor(const pcl::PointXYZ& /*point*/,
   return color_map->colorLookup(0);
 }
 
-/// Convert pointclouds of different PCL types to a voxblox pointcloud.
+// Need a structure to keep xyz and two more float values.  
+// The pcl::PointNormal seems to be the best available.
+// Use normal_x to keep the color and normal_y to keep a weight.
+template <>
+inline Color convertColor(const pcl::PointNormal& point,
+                          const std::shared_ptr<ColorMap>& color_map) {
+  return color_map->colorLookup(point.normal_x);
+}
+
+/// Convert point clouds of different PCL types to a voxblox pointcloud.
 template <typename PCLPoint>
 inline void convertPointcloud(
     const typename pcl::PointCloud<PCLPoint>& pointcloud_pcl,
@@ -142,6 +151,33 @@ inline void convertPointcloud(
   }
 }
 
+/// Specialization for when a weight exists.
+inline void convertPointCloudWithWeight(
+    const pcl::PointCloud<pcl::PointNormal >& pointcloud_pcl,
+    const std::shared_ptr<ColorMap>         & color_map,
+    Pointcloud                              * points_C,
+    Colors                                  * colors,
+    std::vector<float>                      * weights) {
+  points_C->reserve(pointcloud_pcl.size());
+  colors->reserve(pointcloud_pcl.size());
+  weights->reserve(pointcloud_pcl.size());
+  points_C->clear();
+  colors->clear();
+  weights->clear();
+  
+  for (size_t i = 0; i < pointcloud_pcl.points.size(); ++i) {
+    if (!isPointFinite(pointcloud_pcl.points[i])) {
+      continue;
+    }
+    points_C->push_back(Point(pointcloud_pcl.points[i].x,
+                              pointcloud_pcl.points[i].y,
+                              pointcloud_pcl.points[i].z));
+    colors->emplace_back(convertColor<pcl::PointNormal>(pointcloud_pcl.points[i], color_map));
+
+    weights->push_back(pointcloud_pcl.points[i].normal_y); // normal_x is for the color
+  }
+}
+  
 // Declarations
 template <typename VoxelType>
 void serializeLayerAsMsg(

@@ -45,52 +45,70 @@ class BatchSdfIntegrator {
   BatchSdfIntegrator(){}
 
   void Run(std::string const& index_file, std::string const& out_cloud,
-           double max_ray_length_m, double voxel_size, int beg, int end){
+           double max_ray_length_m, double voxel_size,
+           std::string const& integrator, int beg, int end){
 
     voxel_size_ = voxel_size;
     voxels_per_side_ = 16;
     block_size_ = voxels_per_side_ * voxel_size_;
-    truncation_distance_ = 2 * voxel_size_;
-    
-    double intensity_max_value = 256;
 
+    // The grid will exist until this far away from the surface in the normal
+    // direction to it. 
+    truncation_distance_ = 20 * voxel_size_;
+
+    double intensity_max_value = 256.0;
+
+    TsdfIntegratorBase::Config config;
+    config.default_truncation_distance = truncation_distance_;
+    config.max_ray_length_m = max_ray_length_m;
+    config.integrator_threads = 16;
+    config.voxel_carving_enabled = false;
+
+    std::cout << "Index file:          " << index_file << std::endl;
+    std::cout << "Output cloud:        " << out_cloud << std::endl;
     std::cout << "Voxel size:          " << voxel_size_ << std::endl;
     std::cout << "Voxels per side:     " << voxels_per_side_ << std::endl;
     std::cout << "Block size           " << block_size_ << std::endl;
     std::cout << "Truncation distance: " << truncation_distance_ << std::endl;
-    std::cout << "Max ray length:      " << max_ray_length_m << std::endl;
     std::cout << "Intensity max value: " << intensity_max_value << std::endl;
-    
-    TsdfIntegratorBase::Config config;
-    config.default_truncation_distance = truncation_distance_;
-    config.max_ray_length_m = max_ray_length_m;
-    config.integrator_threads = 1;
-    
-//     // Simple integrator
-//     Layer<TsdfVoxel> simple_layer(voxel_size_, voxels_per_side_);
-//     SimpleTsdfIntegrator simple_integrator(config, &simple_layer);
+    std::cout << "Integrator:          " << integrator << std::endl;
 
+    std::cout << config.print() << std::endl;
+    
+    // Simple integrator
+    Layer<TsdfVoxel> simple_layer(voxel_size_, voxels_per_side_);
+    SimpleTsdfIntegrator simple_integrator(config, &simple_layer);
+    
     // Merged integrator
     Layer<TsdfVoxel> merged_layer(voxel_size_, voxels_per_side_);
     MergedTsdfIntegrator merged_integrator(config, &merged_layer);
 
-//     // Fast integrator
-//     Layer<TsdfVoxel> fast_layer(voxel_size_, voxels_per_side_);
-//     FastTsdfIntegrator fast_integrator(config, &fast_layer);
+    // Fast integrator
+    Layer<TsdfVoxel> fast_layer(voxel_size_, voxels_per_side_);
+    FastTsdfIntegrator fast_integrator(config, &fast_layer);
 
     mesh_layer_.reset(new MeshLayer(block_size_));
-    
     color_map_.reset(new GrayscaleColorMap());
-
     color_map_->setMaxValue(intensity_max_value);
 
-    // Note that we use the merging integrator!
     MeshIntegratorConfig mesh_config;
-    mesh_integrator_.reset(new MeshIntegrator<TsdfVoxel>(mesh_config,
-                                                         &merged_layer,
-                                                         mesh_layer_.get()));
-
-
+    if (integrator == "simple") 
+      mesh_integrator_.reset(new MeshIntegrator<TsdfVoxel>(mesh_config,
+                                                           &simple_layer,
+                                                           mesh_layer_.get()));
+    else if (integrator == "merged") 
+      mesh_integrator_.reset(new MeshIntegrator<TsdfVoxel>(mesh_config,
+                                                           &merged_layer,
+                                                           mesh_layer_.get()));
+    else if (integrator == "fast") 
+      mesh_integrator_.reset(new MeshIntegrator<TsdfVoxel>(mesh_config,
+                                                           &fast_layer,
+                                                           mesh_layer_.get()));
+    else {
+      std::cout << "Unknown integrator: " << integrator << std::endl;
+      exit(1);
+    }
+    
     std::vector<std::string> clouds, poses;
     std::cout << "Reading: " << index_file << std::endl;
 
@@ -108,9 +126,10 @@ class BatchSdfIntegrator {
       
       Pointcloud points_C;
       Colors colors;
+      std::vector<float> weights;
 
-      pcl::PointCloud<pcl::PointXYZI> pointcloud_pcl;
-      if (pcl::io::loadPCDFile<pcl::PointXYZI> (clouds[i], pointcloud_pcl) == -1) {
+      pcl::PointCloud<pcl::PointNormal> pointcloud_pcl;
+      if (pcl::io::loadPCDFile<pcl::PointNormal> (clouds[i], pointcloud_pcl) == -1) {
         std::cout << "Could not read: " << clouds[i] << std::endl;
         return;
       }
@@ -118,8 +137,8 @@ class BatchSdfIntegrator {
       std::cout << "Processing: " << clouds[i] << std::endl;
       //std::cout << "Loaded " << pointcloud_pcl.width * pointcloud_pcl.height
       //          << " data points\n";
-      
-      convertPointcloud(pointcloud_pcl, color_map_, &points_C, &colors);
+
+      convertPointCloudWithWeight(pointcloud_pcl, color_map_, &points_C, &colors, &weights);
 
       // Read the transform from camera that acquired the point clouds to world
       Eigen::Affine3d T;
@@ -128,8 +147,15 @@ class BatchSdfIntegrator {
       Point position = T.translation().cast<float>();
       Quaternion rotation(T.linear().cast<float>());
       Transformation Pose(rotation, position);
-      
-      merged_integrator.integratePointCloud(Pose, points_C, colors);
+
+      if (integrator == "simple") {
+        simple_integrator.pointWeights = weights; 
+        simple_integrator.integratePointCloud(Pose, points_C, colors);
+      }
+      else if (integrator == "merged") 
+        merged_integrator.integratePointCloud(Pose, points_C, colors);
+      else if (integrator == "fast") 
+        fast_integrator.integratePointCloud(Pose, points_C, colors);
     }
     
     const bool clear_mesh = true;
@@ -164,30 +190,26 @@ class BatchSdfIntegrator {
 
 int main(int argc, char** argv) {
 
-  if (argc < 5) {
-    std::cout << "Must specify the data index file, output cloud name, and max ray length."
-	  << std::endl;
+  if (argc < 6) {
+    std::cout << "Must specify the data index file, output cloud name, max ray length, "
+              << "and integrator type.\n";
     return 1;
   }
-  
-  std::string index_file = argv[1];
-  std::string out_cloud = argv[2];
-  double max_ray_length_m = atof(argv[3]);
-  double voxel_size = atof(argv[4]);
 
   int beg = 0;
   int end = std::numeric_limits<int>::max();
-  if (argc >= 6) {
-    beg = atoi(argv[5]);
-    end = atoi(argv[6]);
+  std::string index_file  = argv[1];
+  std::string out_cloud   = argv[2];
+  double max_ray_length_m = atof(argv[3]);
+  double voxel_size       = atof(argv[4]);
+  std::string integrator   = argv[5];
+  if (argc >= 8) {
+    beg = atoi(argv[6]);
+    end = atoi(argv[7]);
   }
   
-  std::cout << "index file is " << index_file << std::endl;
-  std::cout << "output cloud is " << out_cloud << std::endl;
-  std::cout << "beg is " << beg << std::endl;
-  std::cout << "end is " << end << std::endl;
   BatchSdfIntegrator B;
-  B.Run(index_file, out_cloud, max_ray_length_m, voxel_size, beg, end);
+  B.Run(index_file, out_cloud, max_ray_length_m, voxel_size, integrator, beg, end);
   
   return 0;
 }

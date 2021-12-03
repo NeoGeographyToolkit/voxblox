@@ -227,6 +227,8 @@ class SimpleTsdfIntegrator : public TsdfIntegratorBase {
                          const Pointcloud& points_C, const Colors& colors,
                          const bool freespace_points,
                          ThreadSafeIndex* index_getter);
+
+  std::vector<float> pointWeights;
 };
 
 /**
