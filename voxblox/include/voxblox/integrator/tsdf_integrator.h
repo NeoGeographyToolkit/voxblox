@@ -107,6 +107,8 @@ class TsdfIntegratorBase {
 
   void setLayer(Layer<TsdfVoxel>* layer);
 
+  std::vector<float> pointWeights;
+
  protected:
   /// Thread safe.
   inline bool isPointValid(const Point& point_C, const bool freespace_point,
@@ -228,7 +230,6 @@ class SimpleTsdfIntegrator : public TsdfIntegratorBase {
                          const bool freespace_points,
                          ThreadSafeIndex* index_getter);
 
-  std::vector<float> pointWeights;
 };
 
 /**

@@ -392,15 +392,21 @@ void MergedTsdfIntegrator::integrateVoxel(
     const Point& point_C = points_C[pt_idx];
     const Color& color = colors[pt_idx];
 
-    const float point_weight = getVoxelWeight(point_C);
-    if (point_weight < kEpsilon) {
+    float weight;
+    if (!pointWeights.empty() && pointWeights[pt_idx] > 0.0)
+      weight = pointWeights[pt_idx]; // custom weight passed from outside
+    else
+      weight = getVoxelWeight(point_C);
+    
+    if (weight < kEpsilon) {
       continue;
     }
-    merged_point_C = (merged_point_C * merged_weight + point_C * point_weight) /
-                     (merged_weight + point_weight);
+    
+    merged_point_C = (merged_point_C * merged_weight + point_C * weight) /
+                     (merged_weight + weight);
     merged_color =
-        Color::blendTwoColors(merged_color, merged_weight, color, point_weight);
-    merged_weight += point_weight;
+        Color::blendTwoColors(merged_color, merged_weight, color, weight);
+    merged_weight += weight;
 
     // only take first point when clearing
     if (clearing_ray) {

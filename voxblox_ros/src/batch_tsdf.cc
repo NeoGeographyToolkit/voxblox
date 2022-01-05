@@ -63,6 +63,7 @@ class BatchSdfIntegrator {
     config.max_ray_length_m = max_ray_length_m;
     config.integrator_threads = 16;
     config.voxel_carving_enabled = false;
+    config.max_weight = 1.0e+5; // the default 1.0e+4 seemed too small
 
     std::cout << "Index file:          " << index_file << std::endl;
     std::cout << "Output cloud:        " << out_cloud << std::endl;
@@ -152,8 +153,10 @@ class BatchSdfIntegrator {
         simple_integrator.pointWeights = weights; 
         simple_integrator.integratePointCloud(Pose, points_C, colors);
       }
-      else if (integrator == "merged") 
+      else if (integrator == "merged") {
+        merged_integrator.pointWeights = weights; 
         merged_integrator.integratePointCloud(Pose, points_C, colors);
+      }
       else if (integrator == "fast") 
         fast_integrator.integratePointCloud(Pose, points_C, colors);
     }
