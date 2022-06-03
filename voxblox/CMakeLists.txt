@@ -89,10 +89,21 @@ target_link_libraries(${PROJECT_NAME} ${PROJECT_NAME}_proto)
 # # BINARIES #
 # ############
 
-add_executable(tsdf_to_esdf
-   test/tsdf_to_esdf.cc
+add_executable(voxblox_mesh
+   bin/voxblox_mesh.cc
 )
-target_link_libraries(tsdf_to_esdf ${PROJECT_NAME} glog)
+target_link_libraries(voxblox_mesh ${PROJECT_NAME} glog pcl_common pcl_io)
+
+# TODO(oalexan1): Note sure about the robustness of the logic below but it seems to work
+if(APPLE)
+  set_target_properties(voxblox_mesh PROPERTIES
+    INSTALL_RPATH "@loader_path;${MULTIVIEW_DEPS_DIR}/lib")
+elseif(UNIX) # Unix which is not Apple
+  set_target_properties(voxblox_mesh PROPERTIES
+    INSTALL_RPATH "$ORIGIN:$ORIGIN/../lib:${MULTIVIEW_DEPS_DIR}/lib")
+endif()
+  
+install(TARGETS voxblox_mesh RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
 
 # add_executable(test_load_esdf
 #   test/test_load_esdf.cc

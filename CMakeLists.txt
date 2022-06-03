@@ -1,3 +1,5 @@
+# Build voxblox without ROS
+
 cmake_minimum_required(VERSION 2.8.12)
 project(voxblox)
 
@@ -34,6 +36,10 @@ else (GLOG_FOUND)
     "GLOG_LIBRARY")
 endif (GLOG_FOUND)
 
+# PCL
+find_package(PCL 1.9 REQUIRED)
+include_directories("${PCL_COMMON_INCLUDE_DIR}")
+
 #find_package(catkin_simple REQUIRED)
 #catkin_simple()
 
@@ -42,13 +48,7 @@ add_definitions(-std=c++11 -Wall -Wextra)
 
 include_directories("${CMAKE_SOURCE_DIR}/include;${Protobuf_INCLUDE_DIR}")
 
-# This will be cloned as a submodule
-message(STATUS "2base dir ${CMAKE_SOURCE_DIR}")
-
-# /usr/local/home/oalexan1/catkin_ws/src/voxblox/minkindr/minkindr/include
-
-message(STATUS "Include ${CMAKE_SOURCE_DIR}/include")
-
+# minkindr will be cloned as a submodule
 include_directories("${CMAKE_SOURCE_DIR}/minkindr/minkindr/include")
 
 add_subdirectory(voxblox)

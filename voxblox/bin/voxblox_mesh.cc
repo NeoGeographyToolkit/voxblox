@@ -1,11 +1,20 @@
-#include "voxblox/core/layer.h"
-#include "voxblox/core/voxel.h"
-#include "voxblox/io/layer_io.h"
-#include "voxblox/simulation/simulation_world.h"
-#include "voxblox/utils/evaluation_utils.h"
-#include "voxblox/utils/layer_utils.h"
-#include "voxblox_ros/tsdf_server.h"
-#include <pcl/io/ply_io.h>
+#include <voxblox/alignment/icp.h>
+#include <voxblox/core/layer.h>
+#include <voxblox/core/tsdf_map.h>
+#include <voxblox/core/voxel.h>
+#include <voxblox/integrator/tsdf_integrator.h>
+#include <voxblox/io/layer_io.h>
+#include <voxblox/io/mesh_ply.h>
+#include <voxblox/mesh/mesh_integrator.h>
+#include <voxblox/mesh/mesh_layer.h>
+#include <voxblox/utils/color_maps.h>
+#include <voxblox/utils/evaluation_utils.h>
+#include <voxblox/utils/layer_utils.h>
+
+#include <pcl/conversions.h>
+#include <pcl/filters/filter.h>
+#include <pcl/point_types.h>
+#include <pcl/io/pcd_io.h>
 
 #include <Eigen/Core>
 #include <Eigen/Geometry>
@@ -14,7 +23,77 @@ DECLARE_bool(alsologtostderr);
 DECLARE_bool(logtostderr);
 DECLARE_int32(v);
 
+// A tool that uses voxblox to fuse point clouds in camera coordinates
+// to a mesh. The input is index file, having a list of camera to world
+// transforms and point clouds. The point cloud is in .pcd format,
+// as output by pc_filter.
+
+// TODO(oalexan1): Make the interface more friendly.
+
+// TODO(oalexan1): Figure out how to save and load the
+// the voxel grid which creates the mesh and how to merge
+// such grids. This will make it possible to do most processing
+// in parallel.
+
+// TODO(oalexan1): See if loading .pcd files in binary would make
+// the processing faster.
+
+// TODO(oalexan1): See if the clouds can be loaded in
+// world coordinates rather than camera coordinates.
+
+// TODO(oalexan1): See if there is no need to include inf values when
+// creating the pcd with pc_filter, as those are skipped here anyway.
+
 using namespace voxblox;  // NOLINT
+
+/// Check if all coordinates in the PCL point are finite.
+template <typename PCLPoint>
+inline bool isPointFinite(const PCLPoint& point) {
+  return std::isfinite(point.x) && std::isfinite(point.y) &&
+         std::isfinite(point.z);
+}
+
+// Given a pcl::PointNormal value, use its normal_x to store a grayscale color.
+// There does not seem to be a more appropriate structure.
+inline Color convertColor(const pcl::PointNormal& point,
+                          const std::shared_ptr<ColorMap>& color_map) {
+  return color_map->colorLookup(point.normal_x);
+}
+
+/// Parse a point cloud having x, y, z, color, and weight
+/// from a pcl::PointNormal structure.
+/// normal_x is the color and normal_y is the weight.
+/// normal_z and the curvature are ignored.
+inline void convertPointCloudWithWeight(
+    const pcl::PointCloud<pcl::PointNormal >& pointcloud_pcl,
+    const std::shared_ptr<ColorMap>         & color_map,
+    Pointcloud                              * points_C,
+    Colors                                  * colors,
+    std::vector<float>                      * weights) {
+  points_C->reserve(pointcloud_pcl.size());
+  colors->reserve(pointcloud_pcl.size());
+  weights->reserve(pointcloud_pcl.size());
+  points_C->clear();
+  colors->clear();
+  weights->clear();
+  
+  for (size_t i = 0; i < pointcloud_pcl.points.size(); ++i) {
+    if (!isPointFinite(pointcloud_pcl.points[i])) {
+      continue;
+    }
+
+    // Read xyz
+    points_C->push_back(Point(pointcloud_pcl.points[i].x,
+                              pointcloud_pcl.points[i].y,
+                              pointcloud_pcl.points[i].z));
+
+    // Read the color
+    colors->emplace_back(convertColor(pointcloud_pcl.points[i], color_map));
+
+    // read the weight
+    weights->push_back(pointcloud_pcl.points[i].normal_y);
+  }
+}
 
 // Read an affine matrix with double values
 void readAffine(Eigen::Affine3d & T, std::string const& filename) {
@@ -25,19 +104,15 @@ void readAffine(Eigen::Affine3d & T, std::string const& filename) {
     for (int col = 0; col < 4; col++){
       double val;
       if ( !(ifs >> val) ) {
-        ROS_ERROR_STREAM("Could not read a 4x4 matrix from: " << filename);
+        LOG(FATAL) << "Could not read a 4x4 matrix from: " << filename;
         return;
       }
       M(row, col) = val;
     }
   }
 
-  //std::cout << "-Read:\n" << M << std::endl;
-
   T.linear()      = M.block<3, 3>(0, 0);
   T.translation() = M.block<3,1>(0,3);
-
-  //std::cout << "affine is\n" << T.matrix() << std::endl;
 }
 
 class BatchSdfIntegrator {
