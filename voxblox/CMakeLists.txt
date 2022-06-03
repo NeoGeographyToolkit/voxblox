@@ -12,10 +12,10 @@ set(PROTO_LIBRARIES "")
 #  PROTOBUF_CATKIN_GENERATE_CPP(PROTO_SRCS PROTO_HDRS ${PROTO_DEFNS})
 #  set(PROTO_LIBRARIES ${protobuf_catkin_LIBRARIES})
 #else()
-  message(STATUS "Using system protobuf")
   find_package(Protobuf REQUIRED)
   PROTOBUF_GENERATE_CPP(PROTO_SRCS PROTO_HDRS ${PROTO_DEFNS})
   set(PROTO_LIBRARIES ${PROTOBUF_LIBRARIES})
+  message(STATUS "Found protobuf libraries: ${PROTO_LIBRARIES}")
 #endif()
 
 # Include protofub  
@@ -64,7 +64,7 @@ set("${PROJECT_NAME}_SRCS"
 
 # Avoid having multiple compiled copies of the same .pb.cc
 # file sharing a single copy of libprotobuf.so
-message(STATUS "proto src ${PROTO_SRC}")
+message(STATUS "Generated proto files: ${PROTO_SRCS}")
 
 add_library(${PROJECT_NAME}_proto
    ${PROTO_SRCS}
