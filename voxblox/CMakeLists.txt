@@ -1,12 +1,3 @@
-cmake_minimum_required(VERSION 2.8.12)
-project(voxblox)
-
-find_package(catkin_simple REQUIRED)
-catkin_simple()
-
-set(CMAKE_MACOSX_RPATH 0)
-add_definitions(-std=c++11 -Wall -Wextra)
-
 ############
 # PROTOBUF #
 ############
@@ -15,17 +6,23 @@ add_definitions(-std=c++11 -Wall -Wextra)
 set(PROTO_DEFNS proto/voxblox/Block.proto
                 proto/voxblox/Layer.proto)
 set(PROTO_LIBRARIES "")
-find_package(protobuf_catkin QUIET)
-if (protobuf_catkin_FOUND)
-  message(STATUS "Using protobuf_catkin")
-  PROTOBUF_CATKIN_GENERATE_CPP(PROTO_SRCS PROTO_HDRS ${PROTO_DEFNS})
-  set(PROTO_LIBRARIES ${protobuf_catkin_LIBRARIES})
-else()
+#find_package(protobuf_catkin QUIET)
+#if (protobuf_catkin_FOUND)
+#  message(STATUS "Using protobuf_catkin")
+#  PROTOBUF_CATKIN_GENERATE_CPP(PROTO_SRCS PROTO_HDRS ${PROTO_DEFNS})
+#  set(PROTO_LIBRARIES ${protobuf_catkin_LIBRARIES})
+#else()
   message(STATUS "Using system protobuf")
   find_package(Protobuf REQUIRED)
   PROTOBUF_GENERATE_CPP(PROTO_SRCS PROTO_HDRS ${PROTO_DEFNS})
   set(PROTO_LIBRARIES ${PROTOBUF_LIBRARIES})
-endif()
+#endif()
+
+# Include protofub  
+include_directories("${Protobuf_INCLUDE_DIR}")
+
+# Include voxblox header files
+include_directories("${CMAKE_CURRENT_SOURCE_DIR}/include")
 
 ####################
 # SET SOURCE FILES #
@@ -67,9 +64,14 @@ set("${PROJECT_NAME}_SRCS"
 
 # Avoid having multiple compiled copies of the same .pb.cc
 # file sharing a single copy of libprotobuf.so
-cs_add_library(${PROJECT_NAME}_proto
-  ${PROTO_SRCS}
+message(STATUS "proto src ${PROTO_SRC}")
+
+add_library(${PROJECT_NAME}_proto
+   ${PROTO_SRCS}
 )
+
+message(STATUS "Create library ${PROJECT_NAME}_proto")
+
 # Specify proto headers as public headers so we can install them later.
 set_target_properties(${PROJECT_NAME}_proto PROPERTIES PUBLIC_HEADER "${PROTO_HDRS}")
 # We need the binary folder in the include directories so we can find the proto
@@ -78,97 +80,97 @@ target_include_directories(${PROJECT_NAME}_proto
                            PUBLIC ${CMAKE_CURRENT_BINARY_DIR})
 target_link_libraries(${PROJECT_NAME}_proto ${PROTO_LIBRARIES})
 
-cs_add_library(${PROJECT_NAME}
+add_library(${PROJECT_NAME}
   ${${PROJECT_NAME}_SRCS}
 )
 target_link_libraries(${PROJECT_NAME} ${PROJECT_NAME}_proto)
 
-############
-# BINARIES #
-############
+# ############
+# # BINARIES #
+# ############
 
 add_executable(tsdf_to_esdf
-  test/tsdf_to_esdf.cc
+   test/tsdf_to_esdf.cc
 )
-target_link_libraries(tsdf_to_esdf ${PROJECT_NAME})
+target_link_libraries(tsdf_to_esdf ${PROJECT_NAME} glog)
 
-add_executable(test_load_esdf
-  test/test_load_esdf.cc
-)
-target_link_libraries(test_load_esdf ${PROJECT_NAME})
+# add_executable(test_load_esdf
+#   test/test_load_esdf.cc
+# )
+# target_link_libraries(test_load_esdf ${PROJECT_NAME})
 
-#########
-# TESTS #
-#########
-add_custom_target(test_data)
-add_custom_command(TARGET test_data
-                  COMMAND rm -rf test_data
-                  COMMAND mkdir -p test_data
-                  COMMAND cp -r ${CMAKE_SOURCE_DIR}/test/test_data/*
-                                test_data/ || :)
+# #########
+# # TESTS #
+# #########
+# add_custom_target(test_data)
+# add_custom_command(TARGET test_data
+#                   COMMAND rm -rf test_data
+#                   COMMAND mkdir -p test_data
+#                   COMMAND cp -r ${CMAKE_SOURCE_DIR}/test/test_data/*
+#                                 test_data/ || :)
 
-#add_definitions(-DVISUALIZE_UNIT_TEST_RESULTS)
+# #add_definitions(-DVISUALIZE_UNIT_TEST_RESULTS)
 
-catkin_add_gtest(test_approx_hash_array
-  test/test_approx_hash_array.cc
-)
-target_link_libraries(test_approx_hash_array ${PROJECT_NAME})
+# catkin_add_gtest(test_approx_hash_array
+#   test/test_approx_hash_array.cc
+# )
+# target_link_libraries(test_approx_hash_array ${PROJECT_NAME})
 
-catkin_add_gtest(test_tsdf_map
-  test/test_tsdf_map.cc
-)
-target_link_libraries(test_tsdf_map ${PROJECT_NAME})
+# catkin_add_gtest(test_tsdf_map
+#   test/test_tsdf_map.cc
+# )
+# target_link_libraries(test_tsdf_map ${PROJECT_NAME})
 
-catkin_add_gtest(test_protobuf
-  test/test_protobuf.cc
-)
-target_link_libraries(test_protobuf ${PROJECT_NAME})
+# catkin_add_gtest(test_protobuf
+#   test/test_protobuf.cc
+# )
+# target_link_libraries(test_protobuf ${PROJECT_NAME})
 
-catkin_add_gtest(test_tsdf_interpolator
-  test/test_tsdf_interpolator.cc
-)
-target_link_libraries(test_tsdf_interpolator ${PROJECT_NAME})
+# catkin_add_gtest(test_tsdf_interpolator
+#   test/test_tsdf_interpolator.cc
+# )
+# target_link_libraries(test_tsdf_interpolator ${PROJECT_NAME})
 
-catkin_add_gtest(test_layer
-  test/test_layer.cc
-)
-target_link_libraries(test_layer ${PROJECT_NAME})
+# catkin_add_gtest(test_layer
+#   test/test_layer.cc
+# )
+# target_link_libraries(test_layer ${PROJECT_NAME})
 
-catkin_add_gtest(test_merge_integration
-  test/test_merge_integration.cc
-)
-target_link_libraries(test_merge_integration ${PROJECT_NAME})
+# catkin_add_gtest(test_merge_integration
+#   test/test_merge_integration.cc
+# )
+# target_link_libraries(test_merge_integration ${PROJECT_NAME})
 
-catkin_add_gtest(test_layer_utils
-  test/test_layer_utils.cc
-)
-target_link_libraries(test_layer_utils ${PROJECT_NAME})
+# catkin_add_gtest(test_layer_utils
+#   test/test_layer_utils.cc
+# )
+# target_link_libraries(test_layer_utils ${PROJECT_NAME})
 
-catkin_add_gtest(test_sdf_integrators
-  test/test_sdf_integrators.cc
-)
-target_link_libraries(test_sdf_integrators ${PROJECT_NAME})
+# catkin_add_gtest(test_sdf_integrators
+#   test/test_sdf_integrators.cc
+# )
+# target_link_libraries(test_sdf_integrators ${PROJECT_NAME})
 
-catkin_add_gtest(test_bucket_queue
-  test/test_bucket_queue.cc
-)
-target_link_libraries(test_bucket_queue ${PROJECT_NAME})
+# catkin_add_gtest(test_bucket_queue
+#   test/test_bucket_queue.cc
+# )
+# target_link_libraries(test_bucket_queue ${PROJECT_NAME})
 
-catkin_add_gtest(test_clear_spheres
-  test/test_clear_spheres.cc
-)
-target_link_libraries(test_clear_spheres ${PROJECT_NAME})
+# catkin_add_gtest(test_clear_spheres
+#   test/test_clear_spheres.cc
+# )
+# target_link_libraries(test_clear_spheres ${PROJECT_NAME})
 
-##########
-# EXPORT #
-##########
+# ##########
+# # EXPORT #
+# ##########
 
-# The proto headers are not installed automatically with cs_install,
-# we need to specify this here.
-install(TARGETS ${PROJECT_NAME}_proto
-        LIBRARY DESTINATION "lib"
-        PUBLIC_HEADER DESTINATION "include"
-)
-cs_install()
-cs_export(INCLUDE_DIRS include ${CMAKE_CURRENT_BINARY_DIR}
-          CFG_EXTRAS voxblox-extras.cmake)
+# # The proto headers are not installed automatically with cs_install,
+# # we need to specify this here.
+# install(TARGETS ${PROJECT_NAME}_proto
+#         LIBRARY DESTINATION "lib"
+#         PUBLIC_HEADER DESTINATION "include"
+# )
+# cs_install()
+# cs_export(INCLUDE_DIRS include ${CMAKE_CURRENT_BINARY_DIR}
+#           CFG_EXTRAS voxblox-extras.cmake)

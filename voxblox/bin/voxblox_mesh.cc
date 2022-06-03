@@ -63,7 +63,10 @@ class BatchSdfIntegrator {
     config.max_ray_length_m = max_ray_length_m;
     config.integrator_threads = 16;
     config.voxel_carving_enabled = false;
-    config.max_weight = 1.0e+5; // the default 1.0e+4 seemed too small
+
+    // The default weight of 1.0e+4 seemed too small. But care here,
+    // as doing weighted averages with floats can result in loss of precision.
+    config.max_weight = 1.0e+5; 
 
     std::cout << "Index file:          " << index_file << std::endl;
     std::cout << "Output cloud:        " << out_cloud << std::endl;
@@ -129,6 +132,9 @@ class BatchSdfIntegrator {
       Colors colors;
       std::vector<float> weights;
 
+      // Load the cloud. x, y, z are the coordinates, normal_x is the color, normal_y is
+      // the weight. Invalid coordinates are inf, inf, inf.
+      // TODO(oalexan1): This needs to be documented somewhere. 
       pcl::PointCloud<pcl::PointNormal> pointcloud_pcl;
       if (pcl::io::loadPCDFile<pcl::PointNormal> (clouds[i], pointcloud_pcl) == -1) {
         std::cout << "Could not read: " << clouds[i] << std::endl;
@@ -195,7 +201,7 @@ int main(int argc, char** argv) {
 
   if (argc < 6) {
     std::cout << "Must specify the data index file, output cloud name, max ray length, "
-              << "and integrator type.\n";
+              << "voxel size, and integrator type.\n";
     return 1;
   }
 
