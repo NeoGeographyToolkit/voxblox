@@ -66,9 +66,9 @@ set("${PROJECT_NAME}_SRCS"
 # file sharing a single copy of libprotobuf.so
 message(STATUS "Generated proto files: ${PROTO_SRCS}")
 
-add_library(${PROJECT_NAME}_proto
-   ${PROTO_SRCS}
-)
+# Make this static as no other tool will use it
+add_library(${PROJECT_NAME}_proto STATIC
+    ${PROTO_SRCS})
 
 message(STATUS "Create library ${PROJECT_NAME}_proto")
 
@@ -80,7 +80,8 @@ target_include_directories(${PROJECT_NAME}_proto
                            PUBLIC ${CMAKE_CURRENT_BINARY_DIR})
 target_link_libraries(${PROJECT_NAME}_proto ${PROTO_LIBRARIES})
 
-add_library(${PROJECT_NAME}
+# Make this static as no other tool will use it
+add_library(${PROJECT_NAME} STATIC
   ${${PROJECT_NAME}_SRCS}
 )
 target_link_libraries(${PROJECT_NAME} ${PROJECT_NAME}_proto)
@@ -102,7 +103,7 @@ elseif(UNIX) # Unix which is not Apple
   set_target_properties(voxblox_mesh PROPERTIES
     INSTALL_RPATH "$ORIGIN:$ORIGIN/../lib:${MULTIVIEW_DEPS_DIR}/lib")
 endif()
-  
+
 install(TARGETS voxblox_mesh RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
 
 # add_executable(test_load_esdf

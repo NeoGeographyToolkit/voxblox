@@ -49,6 +49,6 @@ add_definitions(-std=c++11 -Wall -Wextra)
 include_directories("${CMAKE_SOURCE_DIR}/include;${Protobuf_INCLUDE_DIR}")
 
 # minkindr will be cloned as a submodule
-include_directories("${CMAKE_SOURCE_DIR}/minkindr/minkindr/include")
+include_directories("${CMAKE_CURRENT_SOURCE_DIR}/minkindr/minkindr/include")
 
 add_subdirectory(voxblox)
