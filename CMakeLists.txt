@@ -1,7 +1,7 @@
 # Build voxblox without ROS
 
-cmake_minimum_required(VERSION 2.8.12)
-project(voxblox)
+cmake_minimum_required(VERSION 3.15.5)
+project(voxblox VERSION 0.1.0 DESCRIPTION "voxblox")
 
 # This should not be required, if not set hopefully the system has the dependencies
 #if("${MULTIVIEW_DEPS_DIR}" STREQUAL "")
@@ -35,6 +35,9 @@ else (GLOG_FOUND)
   message(FATAL_ERROR "Can't find Glog. Please set GLOG_INCLUDE_DIR & "
     "GLOG_LIBRARY")
 endif (GLOG_FOUND)
+
+# Boost
+find_package(Boost 1.68 REQUIRED COMPONENTS filesystem)
 
 # PCL
 find_package(PCL 1.9 REQUIRED)
