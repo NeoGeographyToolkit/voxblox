@@ -274,9 +274,9 @@ class BatchSdfIntegrator {
 
 int main(int argc, char** argv) {
 
-  if (argc < 6) {
+  if (argc < 5) {
     std::cout << "Must specify the data index file, output cloud name, max ray length, "
-              << "voxel size, and integrator type.\n";
+              << " and voxel size.\n";
     return 1;
   }
 
@@ -286,7 +286,10 @@ int main(int argc, char** argv) {
   std::string out_cloud   = argv[2];
   double max_ray_length_m = atof(argv[3]);
   double voxel_size       = atof(argv[4]);
-  std::string integrator   = argv[5];
+  std::string integrator = "merged";
+  if (argc >= 6) 
+    integrator = argv[5];
+
   if (argc >= 8) {
     beg = atoi(argv[6]);
     end = atoi(argv[7]);
