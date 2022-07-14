@@ -27,6 +27,14 @@ else (EIGEN3_FOUND)
 endif (EIGEN3_FOUND)
 include_directories("${EIGEN3_INCLUDE_DIR}")
 
+# GFlags 
+find_package(Gflags REQUIRED)
+if (GFLAGS_FOUND)
+   message("-- Found Google Flags: ${GFLAGS_INCLUDE_DIRS} in namespace: ${GFLAGS_NAMESPACE}")
+else (GFLAGS_FOUND)
+   message(FATAL_ERROR "Can't find Google FLAGS.")
+endif (GFLAGS_FOUND)
+
 # GLog
 find_package(Glog REQUIRED)
 if (GLOG_FOUND)

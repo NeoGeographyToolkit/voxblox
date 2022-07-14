@@ -23,6 +23,32 @@ DECLARE_bool(alsologtostderr);
 DECLARE_bool(logtostderr);
 DECLARE_int32(v);
 
+DEFINE_string(index, "", "A list having input camera transforms and point cloud files.");
+
+DEFINE_string(output_mesh, "", "The output mesh file name, in .ply format.");
+
+DEFINE_double(min_ray_length, -1.0,
+              "The minimum length of a ray from camera center to the points. Points closer than that will be ignored.");
+
+DEFINE_double(max_ray_length, -1.0,
+              "The maximum length of a ray from camera center to the points. Points beyond that will be ignored.");
+
+DEFINE_double(voxel_size, 0.01,
+              "Voxel size, in meters.");
+
+DEFINE_double(min_weight, 1.0e-6,
+              "The minimum weighting needed for a point to be included in the mesh.");
+
+DEFINE_string(integrator, "merged", "Specify how the points should be integrated. "
+              "Options: 'simple', 'merged', 'fast'. See the VoxBlox documentation for details.");
+
+DEFINE_bool(voxel_carving_enabled, false,
+            "If true, the entire length of a ray is integrated. Otherwise "
+            "only the region inside the truncation distance is used. This is an advanced option.");
+
+DEFINE_bool(enable_anti_grazing, false,
+            "If true, enable anti-grazing. This is an advanced option.");
+
 // A tool that uses voxblox to fuse point clouds in camera coordinates
 // to a mesh. The input is index file, having a list of camera to world
 // transforms and point clouds. The point cloud is in .pcd format,
@@ -35,14 +61,8 @@ DECLARE_int32(v);
 // such grids. This will make it possible to do most processing
 // in parallel.
 
-// TODO(oalexan1): See if loading .pcd files in binary would make
-// the processing faster.
-
 // TODO(oalexan1): See if the clouds can be loaded in
 // world coordinates rather than camera coordinates.
-
-// TODO(oalexan1): See if there is no need to include inf values when
-// creating the pcd with pc_filter, as those are skipped here anyway.
 
 using namespace voxblox;  // NOLINT
 
@@ -119,33 +139,34 @@ class BatchSdfIntegrator {
  public:
   BatchSdfIntegrator(){}
 
-  void Run(std::string const& index_file, std::string const& out_cloud,
-           double max_ray_length_m, double voxel_size,
-           std::string const& integrator, int beg, int end){
+  void Run(std::string const& index_file, std::string const& output_mesh,
+           double min_ray_length_m, double max_ray_length_m, double voxel_size,
+           std::string const& integrator) {
 
-    voxel_size_ = voxel_size;
     voxels_per_side_ = 16;
-    block_size_ = voxels_per_side_ * voxel_size_;
+    block_size_ = voxels_per_side_ * voxel_size;
 
     // The grid will exist until this far away from the surface in the normal
     // direction to it. 
-    truncation_distance_ = 20 * voxel_size_;
+    truncation_distance_ = 20 * voxel_size;
 
     double intensity_max_value = 256.0;
 
     TsdfIntegratorBase::Config config;
     config.default_truncation_distance = truncation_distance_;
+    config.min_ray_length_m = min_ray_length_m;
     config.max_ray_length_m = max_ray_length_m;
     config.integrator_threads = 16;
-    config.voxel_carving_enabled = false;
+    config.voxel_carving_enabled = FLAGS_voxel_carving_enabled;
+    config.enable_anti_grazing = FLAGS_enable_anti_grazing;
 
     // The default weight of 1.0e+4 seemed too small. But care here,
     // as doing weighted averages with floats can result in loss of precision.
     config.max_weight = 1.0e+5; 
 
     std::cout << "Index file:          " << index_file << std::endl;
-    std::cout << "Output cloud:        " << out_cloud << std::endl;
-    std::cout << "Voxel size:          " << voxel_size_ << std::endl;
+    std::cout << "Output mesh:         " << output_mesh << std::endl;
+    std::cout << "Voxel size:          " << voxel_size << std::endl;
     std::cout << "Voxels per side:     " << voxels_per_side_ << std::endl;
     std::cout << "Block size           " << block_size_ << std::endl;
     std::cout << "Truncation distance: " << truncation_distance_ << std::endl;
@@ -155,15 +176,15 @@ class BatchSdfIntegrator {
     std::cout << config.print() << std::endl;
     
     // Simple integrator
-    Layer<TsdfVoxel> simple_layer(voxel_size_, voxels_per_side_);
+    Layer<TsdfVoxel> simple_layer(voxel_size, voxels_per_side_);
     SimpleTsdfIntegrator simple_integrator(config, &simple_layer);
     
     // Merged integrator
-    Layer<TsdfVoxel> merged_layer(voxel_size_, voxels_per_side_);
+    Layer<TsdfVoxel> merged_layer(voxel_size, voxels_per_side_);
     MergedTsdfIntegrator merged_integrator(config, &merged_layer);
 
     // Fast integrator
-    Layer<TsdfVoxel> fast_layer(voxel_size_, voxels_per_side_);
+    Layer<TsdfVoxel> fast_layer(voxel_size, voxels_per_side_);
     FastTsdfIntegrator fast_integrator(config, &fast_layer);
 
     mesh_layer_.reset(new MeshLayer(block_size_));
@@ -187,6 +208,10 @@ class BatchSdfIntegrator {
       std::cout << "Unknown integrator: " << integrator << std::endl;
       exit(1);
     }
+
+    mesh_config.min_weight = FLAGS_min_weight;
+    
+    std::cout << mesh_config.print() << std::endl;
     
     std::vector<std::string> clouds, poses;
     std::cout << "Reading: " << index_file << std::endl;
@@ -200,20 +225,22 @@ class BatchSdfIntegrator {
     
     for (int i = 0; i < static_cast<int>(clouds.size()); i++) {
 
-      if (i < beg || i >= end) 
-        continue;
-      
       Pointcloud points_C;
       Colors colors;
       std::vector<float> weights;
 
       // Load the cloud. x, y, z are the coordinates, normal_x is the color, normal_y is
       // the weight. Invalid coordinates are inf, inf, inf.
-      // TODO(oalexan1): This needs to be documented somewhere. 
+      // Don't fail because of a single missing cloud.
       pcl::PointCloud<pcl::PointNormal> pointcloud_pcl;
-      if (pcl::io::loadPCDFile<pcl::PointNormal> (clouds[i], pointcloud_pcl) == -1) {
-        std::cout << "Could not read: " << clouds[i] << std::endl;
-        return;
+      try { 
+        if (pcl::io::loadPCDFile<pcl::PointNormal> (clouds[i], pointcloud_pcl) == -1) {
+          // The above will print an error message
+          continue;
+        }
+      } catch(std::exception const& e) {
+        std::cout << e.what() << std::endl;
+        continue;
       }
 
       std::cout << "Processing: " << clouds[i] << std::endl;
@@ -249,8 +276,8 @@ class BatchSdfIntegrator {
       mesh_integrator_->generateMesh(only_mesh_updated_blocks,
                                      clear_updated_flag);
 
-      std::cout << "Writing: " << out_cloud << std::endl;
-      const bool success = outputMeshLayerAsPly(out_cloud, *mesh_layer_);
+      std::cout << "Writing: " << output_mesh << std::endl;
+      const bool success = outputMeshLayerAsPly(output_mesh, *mesh_layer_);
       if (!success) {
         std::cout << "Could not write the mesh." << std::endl;
       }
@@ -261,7 +288,6 @@ class BatchSdfIntegrator {
  protected:
 
   // Map settings
-  FloatingPoint voxel_size_;
   int voxels_per_side_;
   double block_size_;
   FloatingPoint truncation_distance_;
@@ -274,29 +300,20 @@ class BatchSdfIntegrator {
 
 int main(int argc, char** argv) {
 
-  if (argc < 5) {
-    std::cout << "Must specify the data index file, output cloud name, max ray length, "
-              << " and voxel size.\n";
-    return 1;
-  }
+  google::ParseCommandLineFlags(&argc, &argv, true);
 
-  int beg = 0;
-  int end = std::numeric_limits<int>::max();
-  std::string index_file  = argv[1];
-  std::string out_cloud   = argv[2];
-  double max_ray_length_m = atof(argv[3]);
-  double voxel_size       = atof(argv[4]);
-  std::string integrator = "merged";
-  if (argc >= 6) 
-    integrator = argv[5];
+  if (FLAGS_index == "" || FLAGS_output_mesh == "" || FLAGS_integrator == "") 
+    LOG(FATAL) << "Not all inputs were specified.\n";  
 
-  if (argc >= 8) {
-    beg = atoi(argv[6]);
-    end = atoi(argv[7]);
-  }
+  if (FLAGS_min_ray_length <= 0.0 || FLAGS_max_ray_length <= 0.0 || FLAGS_voxel_size <= 0.0) 
+    LOG(FATAL) << "Min/max ray length and voxel size must be positive.\n";  
+  if (FLAGS_min_weight <= 0.0) 
+    LOG(FATAL) << "The minimum weight must be positive.\n";
   
   BatchSdfIntegrator B;
-  B.Run(index_file, out_cloud, max_ray_length_m, voxel_size, integrator, beg, end);
+  B.Run(FLAGS_index, FLAGS_output_mesh, FLAGS_min_ray_length, FLAGS_max_ray_length,
+        FLAGS_voxel_size,
+        FLAGS_integrator);
   
   return 0;
 }

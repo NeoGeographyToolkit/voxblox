@@ -93,7 +93,7 @@ target_link_libraries(${PROJECT_NAME} ${PROJECT_NAME}_proto)
 add_executable(voxblox_mesh
    bin/voxblox_mesh.cc
 )
-target_link_libraries(voxblox_mesh ${PROJECT_NAME} glog pcl_common pcl_io Boost::filesystem)
+target_link_libraries(voxblox_mesh ${PROJECT_NAME} gflags glog pcl_common pcl_io Boost::filesystem)
 
 # TODO(oalexan1): Note sure about the robustness of the logic below but it seems to work
 if(APPLE)
