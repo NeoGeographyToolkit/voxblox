@@ -45,7 +45,7 @@ else (GLOG_FOUND)
 endif (GLOG_FOUND)
 
 # Boost
-find_package(Boost 1.68 REQUIRED COMPONENTS filesystem)
+find_package(Boost 1.72 REQUIRED COMPONENTS filesystem)
 
 # PCL
 find_package(PCL 1.9 REQUIRED)
