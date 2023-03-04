@@ -111,6 +111,9 @@ double find_median(std::vector<double> const& v) {
 // TODO(oalexan1): Move this to utilities.
 void median_filter(int win, double thresh, pcl::PointCloud<pcl::PointNormal> & pc) {
 
+  if (pc.width == 1 || pc.height == 1) 
+    LOG(FATAL) << "Median filtering expects the cloud not to be stored as one row.\n";
+  
   pcl::PointCloud<pcl::PointNormal> work_pc = pc; // make a deep copy
 
   double inf = std::numeric_limits<double>::infinity();
