@@ -49,6 +49,9 @@ DEFINE_bool(voxel_carving_enabled, false,
 DEFINE_bool(enable_anti_grazing, false,
             "If true, enable anti-grazing. This is an advanced option.");
 
+DEFINE_string(median_filter, "",
+              "Filter out depth points that differ in any of the coordinates by more than a given threshold from the median of such coordinates in a square window of given size. Specify in quotes, as: 'window thresh'. The window is an odd integer and in units of pixel (given the image storage format of the cloud) and the threshold is measured in meters.");
+
 // A tool that uses voxblox to fuse point clouds in camera coordinates
 // to a mesh. The input is index file, having a list of camera to world
 // transforms and point clouds. The point cloud is in .pcd format,
@@ -66,11 +69,103 @@ DEFINE_bool(enable_anti_grazing, false,
 
 using namespace voxblox;  // NOLINT
 
+// TODO(oalexan1): Move this to utilities.
+std::vector<double> str2vec(std::string const& str) {
+  double val;
+  std::vector<double> vals;
+  std::istringstream ifs(str);
+  while (ifs >> val)
+    vals.push_back(val);
+
+  return vals;
+}
+
 /// Check if all coordinates in the PCL point are finite.
+// TODO(oalexan1): Move this to utilities.
 template <typename PCLPoint>
 inline bool isPointFinite(const PCLPoint& point) {
   return std::isfinite(point.x) && std::isfinite(point.y) &&
          std::isfinite(point.z);
+}
+
+// Check if all coordinates in the PCL point are zero. Normally
+// that should not happen as the origin is where the sensor is placed.
+// TODO(oalexan1): Move this to utilities.
+template <typename PCLPoint>
+inline bool isPointZero(const PCLPoint& point) {
+  return (point.x == 0.0) && (point.y == 0.0) && (point.z == 0.0);
+}
+
+// Find the median of a sorted vector
+// TODO(oalexan1): May need to put here a partial check that the vector is sorted
+double find_median(std::vector<double> const& v) {
+  if (v.empty()) LOG(FATAL) << "Cannot find the median of an empty vector.\n";
+
+  int a = (v.size() - 1) / 2;
+  int b = (v.size() - 0) / 2;
+
+  return (v[a] + v[b]) / 2.0;
+}
+
+// Filter a point cloud in-place. Inf and (0, 0, 0) values are handled as missing data.
+// TODO(oalexan1): Move this to utilities.
+void median_filter(int win, double thresh, pcl::PointCloud<pcl::PointNormal> & pc) {
+
+  pcl::PointCloud<pcl::PointNormal> work_pc = pc; // make a deep copy
+
+  double inf = std::numeric_limits<double>::infinity();
+  for (std::uint32_t row = 0; row < work_pc.height; row++) {
+    for (std::uint32_t col = 0; col < work_pc.width; col++) {
+
+      // Index in the cloud. Avoid int overflow.
+      std::uint64_t i = std::uint64_t(row) * std::uint64_t(work_pc.width) + std::uint64_t(col);
+      if (!isPointFinite(work_pc.points[i]) || isPointZero(work_pc.points[i]))
+        continue; // outlier
+
+      std::vector<double> dist_x, dist_y, dist_z;
+
+      for (int irow = -win / 2; irow <= win / 2; irow++) {
+        for (int icol = -win / 2; icol <= win / 2; icol++) {
+          // Skip if out of bounds
+          if (row + irow < 0 || row + irow >= work_pc.height) continue;
+          if (col + icol < 0 || col + icol >= work_pc.width) continue;
+
+          // Index in the cloud. Avoid int overflow.
+          int j = std::uint64_t(row + irow) * std::uint64_t(work_pc.width)
+            + std::uint64_t(col + icol);
+
+          if (!isPointFinite(work_pc.points[j]) || isPointZero(work_pc.points[j]))
+            continue;
+
+          dist_x.push_back(work_pc.points[j].x);
+          dist_y.push_back(work_pc.points[j].y);
+          dist_z.push_back(work_pc.points[j].z);
+        }
+      }
+
+      if (dist_x.size() < std::max(2, std::min(5, win))) {
+        // so few neighbors, could just toss it out
+        pc.points[i].x = inf;
+        pc.points[i].y = inf;
+        pc.points[i].z = inf;
+        continue;
+      }
+
+      std::sort(dist_x.begin(), dist_x.end());
+      std::sort(dist_y.begin(), dist_y.end());
+      std::sort(dist_z.begin(), dist_z.end());
+
+      if (std::abs(find_median(dist_x) - pc.points[i].x) > thresh ||
+          std::abs(find_median(dist_y) - pc.points[i].y) > thresh ||
+          std::abs(find_median(dist_z) - pc.points[i].z) > thresh) {
+        pc.points[i].x = inf;
+        pc.points[i].y = inf;
+        pc.points[i].z = inf;
+      }
+    }
+  }
+
+  return;
 }
 
 // Given a pcl::PointNormal value, use its normal_x to store a grayscale color.
@@ -85,11 +180,11 @@ inline Color convertColor(const pcl::PointNormal& point,
 /// normal_x is the color and normal_y is the weight.
 /// normal_z and the curvature are ignored.
 inline void convertPointCloudWithWeight(
-    const pcl::PointCloud<pcl::PointNormal >& pointcloud_pcl,
-    const std::shared_ptr<ColorMap>         & color_map,
-    Pointcloud                              * points_C,
-    Colors                                  * colors,
-    std::vector<float>                      * weights) {
+    const pcl::PointCloud<pcl::PointNormal>& pointcloud_pcl,
+    const std::shared_ptr<ColorMap>        & color_map,
+    Pointcloud                             * points_C,
+    Colors                                 * colors,
+    std::vector<float>                     * weights) {
   points_C->reserve(pointcloud_pcl.size());
   colors->reserve(pointcloud_pcl.size());
   weights->reserve(pointcloud_pcl.size());
@@ -141,8 +236,16 @@ class BatchSdfIntegrator {
 
   void Run(std::string const& index_file, std::string const& output_mesh,
            double min_ray_length_m, double max_ray_length_m, double voxel_size,
+           std::vector<double> const& median_filter_params,
            std::string const& integrator) {
 
+    if (median_filter_params.size() >= 2) {
+      if (int(median_filter_params[0]) % 2 != 1 || int(median_filter_params[0]) < 3) 
+        LOG(FATAL) << "The median window must be an odd integer and no less than 3.\n";
+      if (median_filter_params[1] <= 0.0) 
+        LOG(FATAL) << "The median filter threshold must be positive.\n";
+    }
+    
     voxels_per_side_ = 16;
     block_size_ = voxels_per_side_ * voxel_size;
 
@@ -244,8 +347,11 @@ class BatchSdfIntegrator {
       }
 
       std::cout << "Processing: " << clouds[i] << std::endl;
-      //std::cout << "Loaded " << pointcloud_pcl.width * pointcloud_pcl.height
-      //          << " data points\n";
+      //std::cout << "Loaded cloud of size " << pointcloud_pcl.width
+      //          << ' ' << pointcloud_pcl.height << ".\n";
+
+      if (!median_filter_params.empty()) 
+        median_filter(median_filter_params[0], median_filter_params[1], pointcloud_pcl);
 
       convertPointCloudWithWeight(pointcloud_pcl, color_map_, &points_C, &colors, &weights);
 
@@ -309,11 +415,12 @@ int main(int argc, char** argv) {
     LOG(FATAL) << "Min/max ray length and voxel size must be positive.\n";  
   if (FLAGS_min_weight <= 0.0) 
     LOG(FATAL) << "The minimum weight must be positive.\n";
-  
+
+  std::vector<double> median_filter_params = str2vec(FLAGS_median_filter);
+
   BatchSdfIntegrator B;
   B.Run(FLAGS_index, FLAGS_output_mesh, FLAGS_min_ray_length, FLAGS_max_ray_length,
-        FLAGS_voxel_size,
-        FLAGS_integrator);
+        FLAGS_voxel_size, median_filter_params, FLAGS_integrator);
   
   return 0;
 }
