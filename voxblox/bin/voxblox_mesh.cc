@@ -50,7 +50,7 @@ DEFINE_bool(enable_anti_grazing, false,
             "If true, enable anti-grazing. This is an advanced option.");
 
 DEFINE_string(median_filter, "",
-              "Filter out depth points that differ in any of the coordinates by more than a given threshold from the median of such coordinates in a square window of given size. Specify in quotes, as: 'window thresh'. The window is an odd integer and in units of pixel (given the image storage format of the cloud) and the threshold is measured in meters.");
+              "Filter out depth points that differ in any of the coordinates by more than a given threshold from the median of such coordinates in a square window of given size. Specify in quotes, as: 'window thresh'. The window is an odd integer and in units of pixel (given the image storage format of the cloud) and the threshold is measured in meters. This assumes that the input .pcd files have more than one row and column, rather than the data being stored in a single row.");
 
 // A tool that uses voxblox to fuse point clouds in camera coordinates
 // to a mesh. The input is index file, having a list of camera to world
