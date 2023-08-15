@@ -48,14 +48,14 @@ endif (GLOG_FOUND)
 find_package(Boost 1.72 REQUIRED COMPONENTS filesystem)
 
 # PCL
-find_package(PCL 1.9 REQUIRED)
+find_package(PCL REQUIRED)
 include_directories("${PCL_COMMON_INCLUDE_DIR}")
 
 #find_package(catkin_simple REQUIRED)
 #catkin_simple()
 
 set(CMAKE_MACOSX_RPATH 0)
-add_definitions(-std=c++11 -Wall -Wextra)
+add_definitions(-std=c++14 -Wall -Wextra) # C++-14 for PCL
 
 include_directories("${CMAKE_SOURCE_DIR}/include;${Protobuf_INCLUDE_DIR}")
 
