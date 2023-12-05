@@ -29,23 +29,23 @@ include_directories("${EIGEN3_INCLUDE_DIR}")
 
 # GFlags 
 find_package(Gflags REQUIRED)
-if (GFLAGS_FOUND)
+if (Gflags_FOUND)
    message("-- Found Google Flags: ${GFLAGS_INCLUDE_DIRS} in namespace: ${GFLAGS_NAMESPACE}")
-else (GFLAGS_FOUND)
+else (Gflags_FOUND)
    message(FATAL_ERROR "Can't find Google FLAGS.")
-endif (GFLAGS_FOUND)
+endif (Gflags_FOUND)
 
 # GLog
 find_package(Glog REQUIRED)
-if (GLOG_FOUND)
+if (Glog_FOUND)
   message("-- Found Google Logging: ${GLOG_INCLUDE_DIRS}")
-else (GLOG_FOUND)
+else (Glog_FOUND)
   message(FATAL_ERROR "Can't find Glog. Please set GLOG_INCLUDE_DIR & "
     "GLOG_LIBRARY")
-endif (GLOG_FOUND)
+endif (Glog_FOUND)
 
 # Boost
-find_package(Boost 1.72 REQUIRED COMPONENTS filesystem)
+find_package(Boost REQUIRED COMPONENTS filesystem)
 
 # PCL
 find_package(PCL REQUIRED)
@@ -55,7 +55,7 @@ include_directories("${PCL_COMMON_INCLUDE_DIR}")
 #catkin_simple()
 
 set(CMAKE_MACOSX_RPATH 0)
-add_definitions(-std=c++14 -Wall -Wextra) # C++-14 for PCL
+add_definitions(-std=c++17 -Wall -Wextra) # For Protobuf
 
 include_directories("${CMAKE_SOURCE_DIR}/include;${Protobuf_INCLUDE_DIR}")
 
