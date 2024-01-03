@@ -22,4 +22,5 @@
 - git:
     local-name: voxblox
     uri: git@github.com:oleg-alexandrov/voxblox.git
+    version: isaac
 

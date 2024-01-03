@@ -21,5 +21,6 @@
     uri: https://github.com/ethz-asl/minkindr_ros.git
 - git:
     local-name: voxblox
-    uri: https://github.com/ethz-asl/voxblox.git
+    uri: https://github.com/oleg-alexandrov/voxblox.git
+    version: isaac
 
