@@ -22,15 +22,14 @@ If you don't have a catkin workspace yet, set it up as follows::
 If using `SSH keys for github <https://help.github.com/articles/connecting-to-github-with-ssh/>`_ (recommended)::
 
 	cd ~/catkin_ws/src/
-	git clone git@github.com:ethz-asl/voxblox.git
+	git clone --branch isaac git@github.com:oleg-alexandrov/voxblox.git
 	wstool init . ./voxblox/voxblox_ssh.rosinstall
 	wstool update
-
 
 If **not using SSH** keys but using https instead::
 
 	cd ~/catkin_ws/src/
-	git clone https://github.com/oleg-alexandrov/voxblox.git
+	git clone --branch isaac https://github.com/oleg-alexandrov/voxblox.git
 	wstool init . ./voxblox/voxblox_https.rosinstall
 	wstool update
 
