@@ -1,6 +1,6 @@
 # Build voxblox without ROS
 
-cmake_minimum_required(VERSION 3.15.5)
+CMAKE_MINIMUM_REQUIRED(VERSION 3.15)
 project(voxblox VERSION 0.1.0 DESCRIPTION "voxblox")
 
 # This should not be required, if not set hopefully the system has the dependencies
@@ -36,6 +36,8 @@ else (Gflags_FOUND)
 endif (Gflags_FOUND)
 
 # GLog
+#add_definitions(-DGLOG_NO_EXPORT)
+add_definitions(-DGLOG_USE_GLOG_EXPORT) # must include this for dynamic linking
 find_package(Glog REQUIRED)
 if (Glog_FOUND)
   message("-- Found Google Logging: ${GLOG_INCLUDE_DIRS}")

@@ -19,6 +19,8 @@
 #include <Eigen/Core>
 #include <Eigen/Geometry>
 
+#include <gflags/gflags.h>
+
 DECLARE_bool(alsologtostderr);
 DECLARE_bool(logtostderr);
 DECLARE_int32(v);
