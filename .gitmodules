@@ -1,4 +1,4 @@
 [submodule "minkindr"]
 	path = minkindr
-	url = git@github.com:NeoGeographyToolkit/minkindr.git
+	url = https://github.com/NeoGeographyToolkit/minkindr.git
 
